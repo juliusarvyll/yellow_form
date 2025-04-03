@@ -33,8 +33,41 @@ class StudentResource extends Resource
 
     protected static ?int $navigationSort = 2;
 
+    /**
+     * Customize the navigation group based on the panel context
+     */
+    public static function getNavigationGroup(): ?string
+    {
+        $user = auth()->user();
+
+        // For dean panel, use a more specific group
+        if ($user && $user->hasRole('Dean')) {
+            return 'Department Management';
+        }
+
+        return static::$navigationGroup;
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+
+        $user = auth()->user();
+
+        // If the user is a dean, scope to their department
+        if ($user && $user->hasRole('Dean') && $user->department_id) {
+            $query->where('department_id', $user->department_id);
+        }
+
+        return $query;
+    }
+
     public static function form(Form $form): Form
     {
+        $user = auth()->user();
+        $isDean = $user && $user->hasRole('Dean');
+        $userDepartmentId = $user ? $user->department_id : null;
+
         return $form
             ->schema([
                 Forms\Components\Section::make('Student Information')
@@ -74,13 +107,26 @@ class StudentResource extends Resource
                     ->schema([
                         Forms\Components\Select::make('department_id')
                             ->label('Department')
-                            ->options(function () {
+                            ->options(function () use ($isDean, $userDepartmentId) {
+                                if ($isDean && $userDepartmentId) {
+                                    // For deans, only show their department
+                                    return Department::where('id', $userDepartmentId)
+                                        ->pluck('department_name', 'id')
+                                        ->toArray();
+                                }
+
+                                // For admins, show all departments
                                 return Department::pluck('department_name', 'id')
                                     ->filter() // Remove any null values
                                     ->toArray();
                             })
                             ->searchable()
                             ->required()
+                            ->disabled($isDean) // Disable for deans so they can't change it
+                            ->default(function () use ($isDean, $userDepartmentId) {
+                                // Set default to dean's department
+                                return $isDean ? $userDepartmentId : null;
+                            })
                             ->live()
                             ->afterStateUpdated(fn (callable $set) => $set('course_id', null)),
                         Forms\Components\Select::make('course_id')
@@ -119,6 +165,10 @@ class StudentResource extends Resource
 
     public static function table(Table $table): Table
     {
+        $user = auth()->user();
+        $isDean = $user && $user->hasRole('Dean');
+        $userDepartmentId = $user ? $user->department_id : null;
+
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('id_number')
@@ -166,9 +216,19 @@ class StudentResource extends Resource
             ])
             ->filters([
                 Tables\Filters\SelectFilter::make('department')
-                    ->relationship('department', 'department_name'),
+                    ->relationship('department', 'department_name')
+                    ->visible(!$isDean) // Hide department filter for deans since they only see their department
+                    ->preload(),
                 Tables\Filters\SelectFilter::make('course')
-                    ->relationship('course', 'course_name'),
+                    ->relationship('course', 'course_name', function ($query) use ($isDean, $userDepartmentId) {
+                        // For deans, only show courses from their department
+                        if ($isDean && $userDepartmentId) {
+                            return $query->where('department_id', $userDepartmentId);
+                        }
+
+                        return $query;
+                    })
+                    ->preload(),
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'active' => 'Active',
@@ -192,7 +252,8 @@ class StudentResource extends Resource
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\DeleteBulkAction::make()
+                        ->visible(!$isDean), // Only available for admins
                 ]),
             ])
             ->headerActions([
@@ -200,51 +261,104 @@ class StudentResource extends Resource
                     ->label('Export PDF')
                     ->icon('heroicon-o-document-arrow-down')
                     ->form([
-                        Forms\Components\Select::make('department_id')
-                            ->label('Department (Optional)')
-                            ->options(function () {
-                                return Department::pluck('department_name', 'id')
-                                    ->filter()
-                                    ->toArray();
-                            })
-                            ->searchable()
-                            ->live()
-                            ->afterStateUpdated(fn (callable $set) => $set('course_id', null)),
-                        Forms\Components\Select::make('course_id')
-                            ->label('Course (Optional)')
-                            ->options(function (callable $get) {
-                                $departmentId = $get('department_id');
-
-                                if (!$departmentId) {
-                                    return Course::pluck('course_name', 'id')
-                                        ->filter()
-                                        ->toArray();
-                                }
-
-                                return Course::where('department_id', $departmentId)
-                                    ->pluck('course_name', 'id')
-                                    ->filter()
-                                    ->toArray();
-                            })
-                            ->searchable()
-                            ->visible(fn (callable $get) => $get('department_id') !== null),
-                        Forms\Components\Select::make('status')
-                            ->label('Status (Optional)')
-                            ->options([
-                                'active' => 'Active',
-                                'inactive' => 'Inactive',
-                                'graduated' => 'Graduated',
-                                'transferred' => 'Transferred',
-                                'suspended' => 'Suspended',
-                            ]),
-                        Forms\Components\Radio::make('include_violations')
-                            ->label('Include Violations')
-                            ->options([
-                                'all' => 'All Students',
-                                'with_violations' => 'Only Students with Violations',
-                                'without_violations' => 'Only Students without Violations',
+                        Forms\Components\Section::make('Date Range')
+                            ->schema([
+                                Forms\Components\DatePicker::make('date_from')
+                                    ->label('From Date')
+                                    ->maxDate(now()),
+                                Forms\Components\DatePicker::make('date_to')
+                                    ->label('To Date')
+                                    ->default(now())
+                                    ->maxDate(now()),
                             ])
-                            ->default('all'),
+                            ->columns(2),
+
+                        Forms\Components\Section::make('Filters')
+                            ->schema([
+                                Forms\Components\Select::make('department_id')
+                                    ->label('Department (Optional)')
+                                    ->options(function () use ($isDean, $userDepartmentId) {
+                                        if ($isDean && $userDepartmentId) {
+                                            // For deans, only show their department
+                                            return Department::where('id', $userDepartmentId)
+                                                ->pluck('department_name', 'id')
+                                                ->toArray();
+                                        }
+
+                                        return Department::pluck('department_name', 'id')
+                                            ->filter()
+                                            ->toArray();
+                                    })
+                                    ->searchable()
+                                    ->default(function () use ($isDean, $userDepartmentId) {
+                                        // Set default to dean's department
+                                        return $isDean ? $userDepartmentId : null;
+                                    })
+                                    ->disabled($isDean) // Disable for deans so they can't change it
+                                    ->live()
+                                    ->afterStateUpdated(fn (callable $set) => $set('course_id', null)),
+
+                                Forms\Components\Select::make('course_id')
+                                    ->label('Course (Optional)')
+                                    ->options(function (callable $get) {
+                                        $departmentId = $get('department_id');
+
+                                        if (!$departmentId) {
+                                            return Course::pluck('course_name', 'id')
+                                                ->filter()
+                                                ->toArray();
+                                        }
+
+                                        return Course::where('department_id', $departmentId)
+                                            ->pluck('course_name', 'id')
+                                            ->filter()
+                                            ->toArray();
+                                    })
+                                    ->searchable()
+                                    ->visible(fn (callable $get) => $get('department_id') !== null),
+
+                                Forms\Components\Select::make('status')
+                                    ->label('Student Status (Optional)')
+                                    ->options([
+                                        'active' => 'Active',
+                                        'inactive' => 'Inactive',
+                                        'graduated' => 'Graduated',
+                                        'transferred' => 'Transferred',
+                                        'suspended' => 'Suspended',
+                                    ]),
+                            ])
+                            ->columns(2),
+
+                        Forms\Components\Section::make('Approval Filters')
+                            ->schema([
+                                Forms\Components\Select::make('dean_approval')
+                                    ->label('Dean Approval Status')
+                                    ->options([
+                                        'all' => 'All Students',
+                                        'approved' => 'Approved by Dean',
+                                        'not_approved' => 'Not Approved by Dean',
+                                    ])
+                                    ->default('all'),
+
+                                Forms\Components\Select::make('head_approval')
+                                    ->label('Head Approval Status')
+                                    ->options([
+                                        'all' => 'All Students',
+                                        'approved' => 'Approved by Head',
+                                        'not_approved' => 'Not Approved by Head',
+                                    ])
+                                    ->default('all'),
+
+                                Forms\Components\Radio::make('include_violations')
+                                    ->label('Violation Status')
+                                    ->options([
+                                        'all' => 'All Students',
+                                        'with_violations' => 'Only Students with Violations',
+                                        'without_violations' => 'Only Students without Violations',
+                                    ])
+                                    ->default('all'),
+                            ])
+                            ->columns(2),
                     ])
                     ->action(function (array $data) {
                         $query = Student::query()
@@ -255,7 +369,20 @@ class StudentResource extends Resource
                                 'yellowForms.violation'
                             ]);
 
-                        // Apply filters
+                        // Apply date range filters if provided
+                        if (!empty($data['date_from'])) {
+                            $query->whereHas('yellowForms', function($query) use ($data) {
+                                $query->whereDate('created_at', '>=', $data['date_from']);
+                            });
+                        }
+
+                        if (!empty($data['date_to'])) {
+                            $query->whereHas('yellowForms', function($query) use ($data) {
+                                $query->whereDate('created_at', '<=', $data['date_to']);
+                            });
+                        }
+
+                        // Apply department and course filters
                         if (!empty($data['department_id'])) {
                             $query->where('department_id', $data['department_id']);
                         }
@@ -275,12 +402,47 @@ class StudentResource extends Resource
                             $query->doesntHave('yellowForms');
                         }
 
+                        // Filter by dean approval status
+                        if ($data['dean_approval'] === 'approved') {
+                            $query->whereHas('yellowForms', function ($query) {
+                                $query->where('dean_verification', true);
+                            });
+                        } elseif ($data['dean_approval'] === 'not_approved') {
+                            $query->whereHas('yellowForms', function ($query) {
+                                $query->where('dean_verification', false);
+                            });
+                        }
+
+                        // Filter by head approval status
+                        if ($data['head_approval'] === 'approved') {
+                            $query->whereHas('yellowForms', function ($query) {
+                                $query->where('head_approval', true);
+                            });
+                        } elseif ($data['head_approval'] === 'not_approved') {
+                            $query->whereHas('yellowForms', function ($query) {
+                                $query->where('head_approval', false);
+                            });
+                        }
+
                         // Get students data
                         $students = $query->get();
 
                         // Generate title based on filters
                         $title = 'Student Report';
                         $subtitle = [];
+
+                        // Add date range to subtitle if provided
+                        if (!empty($data['date_from']) && !empty($data['date_to'])) {
+                            $fromDate = date('M d, Y', strtotime($data['date_from']));
+                            $toDate = date('M d, Y', strtotime($data['date_to']));
+                            $subtitle[] = "Yellow Forms Date Range: {$fromDate} to {$toDate}";
+                        } elseif (!empty($data['date_from'])) {
+                            $fromDate = date('M d, Y', strtotime($data['date_from']));
+                            $subtitle[] = "Yellow Forms From: {$fromDate}";
+                        } elseif (!empty($data['date_to'])) {
+                            $toDate = date('M d, Y', strtotime($data['date_to']));
+                            $subtitle[] = "Yellow Forms Until: {$toDate}";
+                        }
 
                         if (!empty($data['department_id'])) {
                             $department = Department::find($data['department_id']);
@@ -302,12 +464,25 @@ class StudentResource extends Resource
                             $subtitle[] = "Only students without violations";
                         }
 
+                        if ($data['dean_approval'] === 'approved') {
+                            $subtitle[] = "Approved by Dean";
+                        } elseif ($data['dean_approval'] === 'not_approved') {
+                            $subtitle[] = "Not approved by Dean";
+                        }
+
+                        if ($data['head_approval'] === 'approved') {
+                            $subtitle[] = "Approved by Head";
+                        } elseif ($data['head_approval'] === 'not_approved') {
+                            $subtitle[] = "Not approved by Head";
+                        }
+
                         // Generate PDF
                         return self::generatePdf($students, $title, $subtitle);
                     }),
                 Tables\Actions\Action::make('import')
                     ->label('Import CSV')
                     ->icon('heroicon-o-arrow-up-tray')
+                    ->visible(!$isDean) // Hide import functionality for deans
                     ->form([
                         Forms\Components\FileUpload::make('csv')
                             ->label('CSV File')

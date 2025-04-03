@@ -18,6 +18,8 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use App\Filament\Resources;
+use Althinect\FilamentSpatieRolesPermissions\Resources\RoleResource;
+use Althinect\FilamentSpatieRolesPermissions\Resources\PermissionResource;
 
 class AdminPanelProvider extends PanelProvider
 {
@@ -38,17 +40,20 @@ class AdminPanelProvider extends PanelProvider
                 Resources\DepartmentResource::class,
                 Resources\CourseResource::class,
                 \App\Filament\Resources\StudentResource::class,
+                Resources\ViolationVerificationResource::class,
+                RoleResource::class,
+                PermissionResource::class,
             ])
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
             ->pages([
                 Pages\Dashboard::class,
             ])
-            ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
+            ->discoverWidgets(in: app_path('Filament/Widgets/Admin'), for: 'App\\Filament\\Widgets\\Admin')
             ->widgets([
                 Widgets\AccountWidget::class,
-                Widgets\FilamentInfoWidget::class,
                 \App\Filament\Widgets\YellowFormStatsOverview::class,
             ])
+            ->authGuard('web')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -59,6 +64,7 @@ class AdminPanelProvider extends PanelProvider
                 SubstituteBindings::class,
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
+                \App\Http\Middleware\RedirectBasedOnRole::class,
             ])
             ->authMiddleware([
                 Authenticate::class,

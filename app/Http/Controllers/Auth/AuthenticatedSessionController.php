@@ -33,7 +33,18 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Get the authenticated user
+        $user = Auth::user();
+
+        // Redirect based on user role
+        if ($user->hasRole(['Super Admin', 'Admin'])) {
+            return redirect()->intended('/admin');
+        } elseif ($user->hasRole('Dean') && $user->department_id !== null) {
+            return redirect()->intended('/dean');
+        }
+
+        // Default redirect to home if no specific role match
+        return redirect()->intended('/');
     }
 
     /**

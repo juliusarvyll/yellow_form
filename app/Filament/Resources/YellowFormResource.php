@@ -201,14 +201,15 @@ class YellowFormResource extends Resource
                     return $violationName;
                 })
                 ->placeholder('None'),
-            Tables\Columns\IconColumn::make('student_approval')
-                ->boolean()
-                ->sortable(),
             Tables\Columns\IconColumn::make('complied')
                 ->boolean()
                 ->sortable(),
             Tables\Columns\IconColumn::make('dean_verification')
                 ->label('Dean Verified')
+                ->boolean()
+                ->sortable(),
+            Tables\Columns\IconColumn::make('head_approval')
+                ->label('Head Approved')
                 ->boolean()
                 ->sortable(),
             Tables\Columns\TextColumn::make('form_count')
@@ -414,11 +415,13 @@ class YellowFormResource extends Resource
 
                 Forms\Components\Section::make('Status and Approvals')
                     ->schema([
-                        Forms\Components\Toggle::make('student_approval')
-                            ->label('Student Approval')
-                            ->default(false),
+                        Forms\Components\Hidden::make('user_id')
+                            ->default(auth()->id()),
                         Forms\Components\TextInput::make('faculty_signature')
-                            ->maxLength(255),
+                            ->label('Faculty Name')
+                            ->default(auth()->user()?->name)
+                            ->disabled()
+                            ->dehydrated(),
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
                             ->default(false),
@@ -426,8 +429,9 @@ class YellowFormResource extends Resource
                         Forms\Components\Toggle::make('dean_verification')
                             ->label('Verified by Dean')
                             ->default(false),
-                        Forms\Components\TextInput::make('noted_by')
-                            ->maxLength(255),
+                        Forms\Components\Toggle::make('head_approval')
+                            ->label('Head Approval')
+                            ->default(false),
                     ])->columns(2),
             ]);
     }
@@ -500,14 +504,15 @@ class YellowFormResource extends Resource
                     return $violationName;
                 })
                 ->placeholder('None'),
-            Tables\Columns\IconColumn::make('student_approval')
-                ->boolean()
-                ->sortable(),
             Tables\Columns\IconColumn::make('complied')
                 ->boolean()
                 ->sortable(),
             Tables\Columns\IconColumn::make('dean_verification')
                 ->label('Dean Verified')
+                ->boolean()
+                ->sortable(),
+            Tables\Columns\IconColumn::make('head_approval')
+                ->label('Head Approved')
                 ->boolean()
                 ->sortable(),
             Tables\Columns\TextColumn::make('form_count')

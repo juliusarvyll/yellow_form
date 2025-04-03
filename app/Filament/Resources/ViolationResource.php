@@ -42,10 +42,10 @@ class ViolationResource extends Resource
     {
         return $table
             ->columns([
-                Tables\Columns\TextColumn::make('violation_legend')
+                Tables\Columns\TextColumn::make('violation_name')
                     ->searchable()
                     ->sortable()
-                    ->label('Violation Code'),
+                    ->label('Violation Name'),
                 Tables\Columns\TextColumn::make('violation_description')
                     ->searchable()
                     ->limit(50)

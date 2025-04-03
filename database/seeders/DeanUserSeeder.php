@@ -20,12 +20,15 @@ class DeanUserSeeder extends Seeder
         foreach ($departments as $department) {
             $deanEmail = strtolower(str_replace(' ', '', $department->department_name)) . '.dean@example.com';
 
-            User::create([
+            $deanUser = User::create([
                 'name' => $department->department_name . ' Dean',
                 'email' => $deanEmail,
                 'password' => Hash::make('password'),
                 'department_id' => $department->id,
             ]);
+
+            // Assign Dean role
+            $deanUser->assignRole('Dean');
 
             $this->command->info("Department: {$department->department_name}");
             $this->command->info("Email: {$deanEmail}");

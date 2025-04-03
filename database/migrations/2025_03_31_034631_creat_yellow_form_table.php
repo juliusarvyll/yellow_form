@@ -23,7 +23,6 @@ return new class extends Migration
             $table->date('date');
             $table->foreignId('violation_id')->constrained('violations');
             $table->string('other_violation')->nullable();
-            $table->boolean('student_approval')->default(false);
             $table->string('faculty_signature')->nullable();
             $table->boolean('complied')->default(false);
             $table->date('compliance_date')->nullable();

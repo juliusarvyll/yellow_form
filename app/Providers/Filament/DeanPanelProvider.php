@@ -18,6 +18,7 @@ use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use App\Filament\Resources\StudentResource;
 
 class DeanPanelProvider extends PanelProvider
 {
@@ -33,6 +34,7 @@ class DeanPanelProvider extends PanelProvider
             ->brandName('Dean Portal')
             ->resources([
                 YellowFormResource::class,
+                StudentResource::class,
             ])
             ->discoverPages(in: app_path('Filament/Pages/Dean'), for: 'App\\Filament\\Pages\\Dean')
             ->pages([
@@ -41,8 +43,10 @@ class DeanPanelProvider extends PanelProvider
             ->discoverWidgets(in: app_path('Filament/Widgets/Dean'), for: 'App\\Filament\\Widgets\\Dean')
             ->widgets([
                 Widgets\AccountWidget::class,
+                \App\Filament\Widgets\DeanDashboardWidget::class,
                 \App\Filament\Widgets\YellowFormStatsOverview::class,
             ])
+            ->authGuard('web')
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -54,10 +58,10 @@ class DeanPanelProvider extends PanelProvider
                 DisableBladeIconComponents::class,
                 DispatchServingFilamentEvent::class,
                 \App\Http\Middleware\EnsureDeanHasDepartment::class,
+                \App\Http\Middleware\RedirectBasedOnRole::class,
             ])
             ->authMiddleware([
                 Authenticate::class,
-            ])
-            ->authGuard('web');
+            ]);
     }
 }

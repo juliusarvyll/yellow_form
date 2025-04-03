@@ -10,6 +10,8 @@ use Database\Seeders\CourseSeeder;
 use Database\Seeders\DeanUserSeeder;
 use Database\Seeders\YellowFormSeeder;
 use Database\Seeders\ViolationSeeder;
+use Database\Seeders\RolesAndPermissionsSeeder;
+use Database\Seeders\HeadRoleSeeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -21,6 +23,8 @@ class DatabaseSeeder extends Seeder
         // User::factory(10)->create();
 
         $this->call([
+            RolesAndPermissionsSeeder::class, // Run this first to set up roles and permissions
+            HeadRoleSeeder::class, // Add the head role
             DepartmentSeeder::class,
             CourseSeeder::class,
             ViolationSeeder::class,

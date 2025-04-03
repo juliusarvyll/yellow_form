@@ -20,7 +20,7 @@ class YellowFormResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-clipboard-document-check';
 
-    protected static ?string $navigationLabel = 'Pending Approvals';
+    protected static ?string $navigationLabel = 'Yellow Forms';
 
     protected static ?string $recordTitleAttribute = 'name';
 
@@ -52,13 +52,8 @@ class YellowFormResource extends Resource
             \Log::info("Forms after dept filtering: $deptFilteredCount");
         }
 
-        $query->where(function ($query) {
-            $query->where('dean_verification', false)
-                ->orWhereNull('dean_verification');
-        });
-
         $verificationFilteredCount = $query->count();
-        \Log::info("Forms after verification filtering: $verificationFilteredCount");
+        \Log::info("Forms after filtering: $verificationFilteredCount");
 
         return $query->orderBy('date', 'desc');
     }
@@ -113,17 +108,16 @@ class YellowFormResource extends Resource
 
                 Forms\Components\Section::make('Student & Faculty Status')
                     ->schema([
-                        Forms\Components\Toggle::make('student_approval')
-                            ->label('Student Acknowledged')
-                            ->disabled(),
                         Forms\Components\TextInput::make('faculty_signature')
                             ->label('Faculty Name')
                             ->disabled(),
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
-                            ->disabled(),
+                            ->default(true)
+                            ->helperText('Automatically marked as complied when approved'),
                         Forms\Components\DatePicker::make('compliance_date')
-                            ->disabled(),
+                            ->default(now())
+                            ->helperText('Date of compliance verification'),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Dean Verification')
@@ -131,11 +125,12 @@ class YellowFormResource extends Resource
                         Forms\Components\Toggle::make('dean_verification')
                             ->label('I verify this violation report')
                             ->required()
+                            ->default(true)
                             ->helperText('By verifying, you confirm this violation has been properly documented and processed'),
-                        Forms\Components\TextInput::make('noted_by')
-                            ->label('Dean Name')
-                            ->required()
-                            ->helperText('Please enter your full name'),
+                        Forms\Components\Textarea::make('verification_notes')
+                            ->label('Verification Notes')
+                            ->placeholder('Add any notes regarding the verification process')
+                            ->maxLength(1000),
                     ]),
             ]);
     }
@@ -173,9 +168,9 @@ class YellowFormResource extends Resource
                     ->label('Violation')
                     ->getStateUsing(function (YellowForm $record): string {
                         if ($record->violation && $record->violation->violation_name === 'OTHER') {
-                            return 'OTHER: ' . $record->other_violation;
+                            return 'OTHER: ' . ($record->other_violation ?? 'Not specified');
                         }
-                        return $record->violation ? $record->violation->violation_legend : 'Unknown';
+                        return $record->violation ? $record->violation->violation_name : 'Unknown';
                     })
                     ->searchable(['violation.violation_legend', 'other_violation']),
                 Tables\Columns\IconColumn::make('complied')
@@ -204,12 +199,12 @@ class YellowFormResource extends Resource
                     ->label('Approve Selected')
                     ->icon('heroicon-o-check')
                     ->action(function (Collection $records) {
-                        $deanName = Auth::user()->name;
-
                         foreach ($records as $record) {
                             $record->update([
                                 'dean_verification' => true,
-                                'noted_by' => $deanName,
+                                'complied' => true,
+                                'compliance_date' => now(),
+                                'verification_notes' => 'Bulk approved by Dean: ' . Auth::user()->name,
                             ]);
                         }
                     })

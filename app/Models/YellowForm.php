@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
+use App\Models\User;
 
 class YellowForm extends Model
 {
@@ -18,12 +20,13 @@ class YellowForm extends Model
         'date',
         'violation_id',
         'other_violation',
-        'student_approval',
         'faculty_signature',
+        'user_id',
         'complied',
         'compliance_date',
         'dean_verification',
-        'noted_by'
+        'head_approval',
+        'verification_notes'
     ];
 
     protected $casts = [
@@ -32,7 +35,31 @@ class YellowForm extends Model
         'student_approval' => 'boolean',
         'complied' => 'boolean',
         'dean_verification' => 'boolean',
+        'head_approval' => 'boolean',
     ];
+
+    /**
+     * Boot the model.
+     */
+    protected static function boot()
+    {
+        parent::boot();
+
+        static::creating(function ($yellowForm) {
+            // Auto-set the user_id to the current authenticated user if not explicitly set
+            if (!$yellowForm->user_id && Auth::check()) {
+                $yellowForm->user_id = Auth::id();
+            }
+
+            // Auto-set the faculty_signature based on the user if not explicitly set
+            if (!$yellowForm->faculty_signature && $yellowForm->user_id) {
+                $user = User::find($yellowForm->user_id);
+                if ($user) {
+                    $yellowForm->faculty_signature = $user->name;
+                }
+            }
+        });
+    }
 
     public function violation(): BelongsTo
     {
@@ -47,6 +74,19 @@ class YellowForm extends Model
     public function course(): BelongsTo
     {
         return $this->belongsTo(Course::class);
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    /**
+     * Get the faculty name from the user relation
+     */
+    public function getFacultyNameAttribute()
+    {
+        return $this->user ? $this->user->name : $this->faculty_signature;
     }
 
     /**

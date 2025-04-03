@@ -27,7 +27,8 @@ class YellowFormController extends Controller
             'complied' => 'boolean',
             'compliance_date' => 'nullable|date',
             'dean_verification' => 'boolean',
-            'noted_by' => 'nullable|string|max:255',
+            'head_approval' => 'boolean',
+            'verification_notes' => 'nullable|string|max:1000',
         ]);
 
         YellowForm::create($validated);
