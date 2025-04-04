@@ -12,10 +12,10 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('yellow_forms', function (Blueprint $table) {
-            $table->dropColumn('noted_by');
-            $table->boolean('head_approval')->default(false)->after('dean_verification');
-            $table->timestamp('head_approval_date')->nullable()->after('head_approval');
-            $table->text('verification_notes')->nullable()->after('head_approval_date');
+            $table->boolean('is_suspended')->default(false);
+            $table->date('suspension_start_date')->nullable();
+            $table->date('suspension_end_date')->nullable();
+            $table->text('suspension_notes')->nullable();
         });
     }
 
@@ -25,8 +25,12 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('yellow_forms', function (Blueprint $table) {
-            $table->string('noted_by')->nullable();
-            $table->dropColumn(['head_approval', 'head_approval_date', 'verification_notes']);
+            $table->dropColumn([
+                'is_suspended',
+                'suspension_start_date',
+                'suspension_end_date',
+                'suspension_notes'
+            ]);
         });
     }
 };

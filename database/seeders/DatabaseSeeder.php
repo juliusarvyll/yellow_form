@@ -29,6 +29,7 @@ class DatabaseSeeder extends Seeder
             CourseSeeder::class,
             ViolationSeeder::class,
             DeanUserSeeder::class,
+            SuperAdminSeeder::class,
             // Add other seeders here
         ]);
     }

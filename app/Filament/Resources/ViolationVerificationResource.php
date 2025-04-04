@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Database\Eloquent\Collection;
+use Closure;
+use Illuminate\Http\Request;
 
 class ViolationVerificationResource extends Resource
 {
@@ -104,6 +106,12 @@ class ViolationVerificationResource extends Resource
                             ->label('Head Approval')
                             ->helperText('Approve or disapprove this violation verification')
                             ->visible(fn () => auth()->user()->hasRole('head')),
+                        Forms\Components\DateTimePicker::make('head_approval_date')
+                            ->label('Head Approval Date')
+                            ->helperText('Date and time when the head approved')
+                            ->visible(fn () => auth()->user()->hasRole('head'))
+                            ->disabled()
+                            ->dehydrated(),
                         Forms\Components\Textarea::make('verification_notes')
                             ->label('Verification Notes')
                             ->placeholder('Add any notes regarding the verification process'),
@@ -204,7 +212,22 @@ class ViolationVerificationResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->action(function (YellowForm $record): void {
+                        $record->update([
+                            'head_approval' => true,
+                            'head_approval_date' => now(),
+                        ]);
+                    })
+                    ->requiresConfirmation()
+                    ->visible(fn (YellowForm $record): bool =>
+                        $record->complied &&
+                        $record->dean_verification &&
+                        !$record->head_approval
+                    ),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([

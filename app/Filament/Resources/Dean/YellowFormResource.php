@@ -191,8 +191,20 @@ class YellowFormResource extends Resource
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make()
-                    ->label('Approve'),
+                Tables\Actions\Action::make('approve')
+                    ->label('Approve')
+                    ->icon('heroicon-o-check')
+                    ->action(function (YellowForm $record): void {
+                        $record->update([
+                            'dean_verification' => true,
+                            'complied' => true,
+                            'compliance_date' => now(),
+                            'verification_notes' => 'Approved by Dean: ' . Auth::user()->name,
+                        ]);
+                    })
+                    ->requiresConfirmation()
+                    ->color('success')
+                    ->visible(fn (YellowForm $record): bool => !$record->dean_verification),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make('bulk_approve')

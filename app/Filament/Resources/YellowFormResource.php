@@ -18,6 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Database\Eloquent\Collection;
 
 class YellowFormResource extends Resource
 {
@@ -185,7 +187,10 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('violation.violation_name')
                 ->label('Violation')
                 ->sortable()
-                ->getStateUsing(function (YellowForm $record): string {
+                ->getStateUsing(function (?YellowForm $record): string {
+                    if (!$record) {
+                        return 'No Record';
+                    }
                     // If there's no violation record, return 'No Violation'
                     if (!$record->violation) {
                         return 'No Violation';
@@ -214,7 +219,7 @@ class YellowFormResource extends Resource
                 ->sortable(),
             Tables\Columns\TextColumn::make('form_count')
                 ->label('Form Count')
-                ->getStateUsing(fn (YellowForm $record): int => $record->getFormCountAttribute())
+                ->getStateUsing(fn (?YellowForm $record): int => $record ? $record->getFormCountAttribute() : 0)
                 ->sortable(query: function (Builder $query, string $direction): Builder {
                     return $query
                         ->selectRaw('yellow_forms.*, (SELECT COUNT(*) FROM yellow_forms as yf WHERE yf.id_number = yellow_forms.id_number) as form_count')
@@ -233,7 +238,27 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('updated_at')
                 ->dateTime()
                 ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true)
+                ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('suspension_status')
+                ->label('Suspension Status')
+                ->badge()
+                ->color(fn (?YellowForm $record): string => match(true) {
+                    !$record => 'gray',
+                    $record->isCurrentlySuspended() => 'danger',
+                    $record->is_suspended && $record->suspension_end_date < now() => 'success',
+                    $record->is_suspended && $record->suspension_start_date > now() => 'warning',
+                    default => 'gray',
+                }),
+            Tables\Columns\TextColumn::make('suspension_start_date')
+                ->label('Suspension Start')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
+            Tables\Columns\TextColumn::make('suspension_end_date')
+                ->label('Suspension End')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
         );
 
         return $form
@@ -413,25 +438,32 @@ class YellowFormResource extends Resource
                             }),
                     ])->columns(1),
 
-                Forms\Components\Section::make('Status and Approvals')
+                Forms\Components\Section::make('Student & Faculty Status')
                     ->schema([
-                        Forms\Components\Hidden::make('user_id')
-                            ->default(auth()->id()),
                         Forms\Components\TextInput::make('faculty_signature')
                             ->label('Faculty Name')
-                            ->default(auth()->user()?->name)
-                            ->disabled()
-                            ->dehydrated(),
+                            ->disabled(),
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
-                            ->default(false),
-                        Forms\Components\DatePicker::make('compliance_date'),
-                        Forms\Components\Toggle::make('dean_verification')
-                            ->label('Verified by Dean')
-                            ->default(false),
-                        Forms\Components\Toggle::make('head_approval')
-                            ->label('Head Approval')
-                            ->default(false),
+                            ->default(true)
+                            ->helperText('Automatically marked as complied when approved'),
+                        Forms\Components\DatePicker::make('compliance_date')
+                            ->default(now())
+                            ->helperText('Date of compliance verification'),
+                        Forms\Components\Toggle::make('is_suspended')
+                            ->label('Suspended')
+                            ->disabled()
+                            ->helperText('Automatically set when student accumulates 3 yellow forms'),
+                        Forms\Components\DatePicker::make('suspension_start_date')
+                            ->label('Suspension Start Date')
+                            ->disabled(),
+                        Forms\Components\DatePicker::make('suspension_end_date')
+                            ->label('Suspension End Date')
+                            ->disabled(),
+                        Forms\Components\Textarea::make('suspension_notes')
+                            ->label('Suspension Notes')
+                            ->disabled()
+                            ->columnSpanFull(),
                     ])->columns(2),
             ]);
     }
@@ -488,7 +520,10 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('violation.violation_name')
                 ->label('Violation')
                 ->sortable()
-                ->getStateUsing(function (YellowForm $record): string {
+                ->getStateUsing(function (?YellowForm $record): string {
+                    if (!$record) {
+                        return 'No Record';
+                    }
                     // If there's no violation record, return 'No Violation'
                     if (!$record->violation) {
                         return 'No Violation';
@@ -517,7 +552,7 @@ class YellowFormResource extends Resource
                 ->sortable(),
             Tables\Columns\TextColumn::make('form_count')
                 ->label('Form Count')
-                ->getStateUsing(fn (YellowForm $record): int => $record->getFormCountAttribute())
+                ->getStateUsing(fn (?YellowForm $record): int => $record ? $record->getFormCountAttribute() : 0)
                 ->sortable(query: function (Builder $query, string $direction): Builder {
                     return $query
                         ->selectRaw('yellow_forms.*, (SELECT COUNT(*) FROM yellow_forms as yf WHERE yf.id_number = yellow_forms.id_number) as form_count')
@@ -536,7 +571,27 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('updated_at')
                 ->dateTime()
                 ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true)
+                ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('suspension_status')
+                ->label('Suspension Status')
+                ->badge()
+                ->color(fn (?YellowForm $record): string => match(true) {
+                    !$record => 'gray',
+                    $record->isCurrentlySuspended() => 'danger',
+                    $record->is_suspended && $record->suspension_end_date < now() => 'success',
+                    $record->is_suspended && $record->suspension_start_date > now() => 'warning',
+                    default => 'gray',
+                }),
+            Tables\Columns\TextColumn::make('suspension_start_date')
+                ->label('Suspension Start')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
+            Tables\Columns\TextColumn::make('suspension_end_date')
+                ->label('Suspension End')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
         );
 
         return $table
@@ -556,14 +611,118 @@ class YellowFormResource extends Resource
                     ->label('Repeat Offenders')
                     ->query(fn (Builder $query): Builder => $query->repeatOffenders())
                     ->toggle(),
+                Tables\Filters\Filter::make('currently_suspended')
+                    ->label('Currently Suspended')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('is_suspended', true)
+                        ->where('suspension_start_date', '<=', now())
+                        ->where('suspension_end_date', '>=', now()))
+                    ->toggle(),
+                Tables\Filters\Filter::make('suspension_completed')
+                    ->label('Suspension Completed')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('is_suspended', true)
+                        ->where('suspension_end_date', '<', now()))
+                    ->toggle(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('impose_suspension')
+                    ->label('Impose Suspension')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->color('danger')
+                    ->form([
+                        Forms\Components\DatePicker::make('suspension_start_date')
+                            ->label('Suspension Start Date')
+                            ->default(now())
+                            ->required(),
+                        Forms\Components\DatePicker::make('suspension_end_date')
+                            ->label('Suspension End Date')
+                            ->default(now()->addDays(7))
+                            ->required(),
+                        Forms\Components\Textarea::make('suspension_notes')
+                            ->label('Suspension Notes')
+                            ->required(),
+                    ])
+                    ->action(function (YellowForm $record, array $data): void {
+                        $record->update([
+                            'is_suspended' => true,
+                            'suspension_start_date' => $data['suspension_start_date'],
+                            'suspension_end_date' => $data['suspension_end_date'],
+                            'suspension_notes' => $data['suspension_notes'],
+                        ]);
+
+                        Notification::make()
+                            ->warning()
+                            ->title('Student Suspended')
+                            ->body("Student {$record->id_number} has been suspended until {$data['suspension_end_date']}.")
+                            ->send();
+                    })
+                    ->visible(fn (YellowForm $record): bool =>
+                        !$record->isCurrentlySuspended() &&
+                        auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
+                Tables\Actions\Action::make('lift_suspension')
+                    ->label('Lift Suspension')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->action(function (YellowForm $record): void {
+                        $record->update([
+                            'is_suspended' => false,
+                            'suspension_end_date' => now(),
+                            'suspension_notes' => $record->suspension_notes . "\nSuspension lifted early on " . now()->format('Y-m-d'),
+                        ]);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Suspension Lifted')
+                            ->body("Suspension has been lifted for student {$record->id_number}.")
+                            ->send();
+                    })
+                    ->requiresConfirmation()
+                    ->visible(fn (YellowForm $record): bool =>
+                        $record->isCurrentlySuspended() &&
+                        auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\BulkAction::make('bulk_suspend')
+                        ->label('Suspend Selected')
+                        ->icon('heroicon-o-exclamation-triangle')
+                        ->color('danger')
+                        ->form([
+                            Forms\Components\DatePicker::make('suspension_start_date')
+                                ->label('Suspension Start Date')
+                                ->default(now())
+                                ->required(),
+                            Forms\Components\DatePicker::make('suspension_end_date')
+                                ->label('Suspension End Date')
+                                ->default(now()->addDays(7))
+                                ->required(),
+                            Forms\Components\Textarea::make('suspension_notes')
+                                ->label('Suspension Notes')
+                                ->required(),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $records->each(function (YellowForm $record) use ($data) {
+                                if (!$record->isCurrentlySuspended()) {
+                                    $record->update([
+                                        'is_suspended' => true,
+                                        'suspension_start_date' => $data['suspension_start_date'],
+                                        'suspension_end_date' => $data['suspension_end_date'],
+                                        'suspension_notes' => $data['suspension_notes'],
+                                    ]);
+                                }
+                            });
+
+                            Notification::make()
+                                ->warning()
+                                ->title('Students Suspended')
+                                ->body("Selected students have been suspended until {$data['suspension_end_date']}.")
+                                ->send();
+                        })
+                        ->visible(fn () => auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
                 ]),
             ]);
     }

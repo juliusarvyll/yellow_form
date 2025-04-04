@@ -26,6 +26,21 @@ class ListYellowForms extends ListRecords
                 ->badge(function () {
                     return YellowForm::count();
                 }),
+            'multiple_violations' => \Filament\Resources\Pages\ListRecords\Tab::make('Multiple Violations')
+                ->modifyQueryUsing(function ($query) {
+                    $subquery = YellowForm::selectRaw('id_number, COUNT(*) as form_count')
+                        ->groupBy('id_number')
+                        ->having('form_count', '>=', 2)
+                        ->pluck('id_number');
+
+                    return $query->whereIn('id_number', $subquery);
+                })
+                ->badge(function () {
+                    return YellowForm::selectRaw('id_number')
+                        ->groupBy('id_number')
+                        ->havingRaw('COUNT(*) >= 2')
+                        ->count();
+                }),
         ];
 
         // Add a tab for each department that has violations

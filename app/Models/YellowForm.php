@@ -26,7 +26,11 @@ class YellowForm extends Model
         'compliance_date',
         'dean_verification',
         'head_approval',
-        'verification_notes'
+        'verification_notes',
+        'is_suspended',
+        'suspension_start_date',
+        'suspension_end_date',
+        'suspension_notes'
     ];
 
     protected $casts = [
@@ -36,6 +40,9 @@ class YellowForm extends Model
         'complied' => 'boolean',
         'dean_verification' => 'boolean',
         'head_approval' => 'boolean',
+        'is_suspended' => 'boolean',
+        'suspension_start_date' => 'date',
+        'suspension_end_date' => 'date'
     ];
 
     /**
@@ -56,6 +63,32 @@ class YellowForm extends Model
                 $user = User::find($yellowForm->user_id);
                 if ($user) {
                     $yellowForm->faculty_signature = $user->name;
+                }
+            }
+
+            // Check if student is currently suspended
+            if (static::isStudentCurrentlySuspended($yellowForm->id_number)) {
+                throw new \Exception('Cannot create new yellow form: Student is currently suspended.');
+            }
+
+            // Get all previous yellow forms for this student
+            $previousFormsCount = static::where('id_number', $yellowForm->id_number)->count();
+
+            // Only apply suspension if this is the third violation
+            if ($previousFormsCount === 2) {
+                // This is exactly the third yellow form, trigger automatic suspension
+                $yellowForm->is_suspended = true;
+                $yellowForm->suspension_start_date = now();
+                $yellowForm->suspension_end_date = now()->addDays(7); // 1 week suspension
+                $yellowForm->suspension_notes = 'Automatic suspension: Student has accumulated 3 yellow forms.';
+
+                // Notify relevant users about the suspension
+                if (class_exists('\Filament\Notifications\Notification')) {
+                    \Filament\Notifications\Notification::make()
+                        ->warning()
+                        ->title('Student Automatically Suspended')
+                        ->body("Student {$yellowForm->id_number} has been suspended for 7 days after receiving their third yellow form.")
+                        ->send();
                 }
             }
         });
@@ -137,5 +170,96 @@ class YellowForm extends Model
                 ->groupBy('id_number')
                 ->havingRaw('COUNT(*) >= ?', [$minCount]);
         });
+    }
+
+    /**
+     * Check if a student is currently suspended
+     */
+    public static function isStudentCurrentlySuspended(string $id_number): bool
+    {
+        $violationCount = static::where('id_number', $id_number)->count();
+
+        // First check if student has enough violations to be suspended
+        if ($violationCount < 3) {
+            return false;
+        }
+
+        // Then check if there's an active suspension
+        return static::where('id_number', $id_number)
+            ->where('is_suspended', true)
+            ->where('suspension_start_date', '<=', now())
+            ->where('suspension_end_date', '>=', now())
+            ->exists();
+    }
+
+    /**
+     * Get all currently suspended students
+     */
+    public static function getCurrentlySuspendedStudents()
+    {
+        return static::where('is_suspended', true)
+            ->where('suspension_start_date', '<=', now())
+            ->where('suspension_end_date', '>=', now())
+            ->whereIn('id_number', function ($query) {
+                $query->select('id_number')
+                    ->from('yellow_forms')
+                    ->groupBy('id_number')
+                    ->havingRaw('COUNT(*) >= ?', [3]);
+            })
+            ->get();
+    }
+
+    /**
+     * Check if this specific yellow form record is under active suspension
+     */
+    public function isCurrentlySuspended(): bool
+    {
+        return $this->is_suspended &&
+            $this->suspension_start_date <= now() &&
+            $this->suspension_end_date >= now();
+    }
+
+    /**
+     * Get remaining suspension days
+     */
+    public function getRemainingSuspensionDays(): ?int
+    {
+        if (!$this->is_suspended || !$this->suspension_end_date) {
+            return null;
+        }
+
+        $endDate = $this->suspension_end_date->startOfDay();
+        $today = now()->startOfDay();
+
+        if ($endDate < $today) {
+            return 0;
+        }
+
+        return $endDate->diffInDays($today);
+    }
+
+    /**
+     * Get suspension status text
+     */
+    public function getSuspensionStatusAttribute(): string
+    {
+        if (!$this->is_suspended) {
+            return 'Not Suspended';
+        }
+
+        if ($this->isCurrentlySuspended()) {
+            $remainingDays = $this->getRemainingSuspensionDays();
+            return "Suspended ({$remainingDays} days remaining)";
+        }
+
+        if ($this->suspension_end_date < now()) {
+            return 'Suspension Completed';
+        }
+
+        if ($this->suspension_start_date > now()) {
+            return 'Suspension Pending';
+        }
+
+        return 'Suspended';
     }
 }

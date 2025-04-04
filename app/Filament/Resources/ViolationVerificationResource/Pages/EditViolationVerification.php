@@ -6,6 +6,7 @@ use App\Filament\Resources\ViolationVerificationResource;
 use Filament\Resources\Pages\EditRecord;
 use Filament\Actions;
 use Filament\Notifications\Notification;
+use App\Models\YellowForm;
 
 class EditViolationVerification extends EditRecord
 {
@@ -48,5 +49,10 @@ class EditViolationVerification extends EditRecord
             ->title($message)
             ->success()
             ->send();
+    }
+
+    public function canEdit(YellowForm $record): bool
+    {
+        return $record->complied && $record->dean_verification;
     }
 }

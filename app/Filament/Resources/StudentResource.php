@@ -105,6 +105,16 @@ class StudentResource extends Resource
 
                 Forms\Components\Section::make('Academic Information')
                     ->schema([
+                        Forms\Components\Toggle::make('is_suspended')
+                            ->label('Suspend Student')
+                            ->helperText('Students with 3 or more violations can be suspended')
+                            ->default(false)
+                            ->visible(function (Student $record) {
+                                return $record->exists && $record->getViolationCountAttribute() >= 3;
+                            })
+                            ->disabled(function (Student $record) {
+                                return !$record->exists || $record->getViolationCountAttribute() < 3;
+                            }),
                         Forms\Components\Select::make('department_id')
                             ->label('Department')
                             ->options(function () use ($isDean, $userDepartmentId) {
@@ -147,17 +157,7 @@ class StudentResource extends Resource
                             ->required(),
                         Forms\Components\TextInput::make('year')
                             ->required()
-                            ->maxLength(255),
-                        Forms\Components\Select::make('status')
-                            ->options([
-                                'active' => 'Active',
-                                'inactive' => 'Inactive',
-                                'graduated' => 'Graduated',
-                                'transferred' => 'Transferred',
-                                'suspended' => 'Suspended',
-                            ])
-                            ->default('active')
-                            ->required(),
+                            ->maxLength(255)
                     ])
                     ->columns(2),
             ]);
@@ -204,7 +204,13 @@ class StudentResource extends Resource
                         $state == 1 => 'info',
                         default => 'success',
                     }),
-
+                Tables\Columns\IconColumn::make('is_suspended')
+                    ->label('Suspended')
+                    ->boolean()
+                    ->trueIcon('heroicon-o-lock-closed')
+                    ->falseIcon('heroicon-o-lock-open')
+                    ->trueColor('danger')
+                    ->falseColor('success'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()
@@ -229,14 +235,6 @@ class StudentResource extends Resource
                         return $query;
                     })
                     ->preload(),
-                Tables\Filters\SelectFilter::make('status')
-                    ->options([
-                        'active' => 'Active',
-                        'inactive' => 'Inactive',
-                        'graduated' => 'Graduated',
-                        'transferred' => 'Transferred',
-                        'suspended' => 'Suspended',
-                    ]),
                 Tables\Filters\Filter::make('has_violations')
                     ->query(fn (Builder $query): Builder => $query->has('yellowForms'))
                     ->label('Has Violations')
@@ -247,8 +245,39 @@ class StudentResource extends Resource
                     ->toggle(),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\EditAction::make(),
+                Tables\Actions\ActionGroup::make([
+                    Tables\Actions\Action::make('toggle_suspension')
+                        ->label(fn (Student $record): string => $record->is_suspended ? 'Unsuspend' : 'Suspend')
+                        ->icon(fn (Student $record): string => $record->is_suspended ? 'heroicon-o-lock-open' : 'heroicon-o-lock-closed')
+                        ->color(fn (Student $record): string => $record->is_suspended ? 'success' : 'danger')
+                        ->visible(fn (Student $record): bool => $record->getViolationCountAttribute() >= 3)
+                        ->requiresConfirmation()
+                        ->modalDescription(fn (Student $record): string =>
+                            $record->is_suspended
+                                ? "Are you sure you want to unsuspend this student?"
+                                : "This student has {$record->getViolationCountAttribute()} violations. Are you sure you want to suspend them?"
+                        )
+                        ->action(function (Student $record): void {
+                            if ($record->getViolationCountAttribute() >= 3) {
+                                $record->is_suspended = !$record->is_suspended;
+                                $record->save();
+
+                                Notification::make()
+                                    ->title($record->is_suspended ? 'Student Suspended' : 'Student Unsuspended')
+                                    ->success()
+                                    ->send();
+                            } else {
+                                Notification::make()
+                                    ->title('Cannot Suspend Student')
+                                    ->body('Students can only be suspended if they have 3 or more violations.')
+                                    ->danger()
+                                    ->send();
+                            }
+                        }),
+                    Tables\Actions\ViewAction::make(),
+                    Tables\Actions\EditAction::make(),
+                    Tables\Actions\DeleteAction::make(),
+                ]),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
@@ -316,18 +345,7 @@ class StudentResource extends Resource
                                     })
                                     ->searchable()
                                     ->visible(fn (callable $get) => $get('department_id') !== null),
-
-                                Forms\Components\Select::make('status')
-                                    ->label('Student Status (Optional)')
-                                    ->options([
-                                        'active' => 'Active',
-                                        'inactive' => 'Inactive',
-                                        'graduated' => 'Graduated',
-                                        'transferred' => 'Transferred',
-                                        'suspended' => 'Suspended',
-                                    ]),
-                            ])
-                            ->columns(2),
+                            ]),
 
                         Forms\Components\Section::make('Approval Filters')
                             ->schema([
