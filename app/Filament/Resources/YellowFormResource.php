@@ -18,7 +18,8 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use App\Filament\Resources\YellowFormResource\Pages\StudentRecords;
+use Illuminate\Support\Facades\Notification;
+use Illuminate\Database\Eloquent\Collection;
 
 class YellowFormResource extends Resource
 {
@@ -186,7 +187,10 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('violation.violation_name')
                 ->label('Violation')
                 ->sortable()
-                ->getStateUsing(function (YellowForm $record): string {
+                ->getStateUsing(function (?YellowForm $record): string {
+                    if (!$record) {
+                        return 'No Record';
+                    }
                     // If there's no violation record, return 'No Violation'
                     if (!$record->violation) {
                         return 'No Violation';
@@ -202,9 +206,6 @@ class YellowFormResource extends Resource
                     return $violationName;
                 })
                 ->placeholder('None'),
-            Tables\Columns\IconColumn::make('student_approval')
-                ->boolean()
-                ->sortable(),
             Tables\Columns\IconColumn::make('complied')
                 ->boolean()
                 ->sortable(),
@@ -212,9 +213,13 @@ class YellowFormResource extends Resource
                 ->label('Dean Verified')
                 ->boolean()
                 ->sortable(),
+            Tables\Columns\IconColumn::make('head_approval')
+                ->label('Head Approved')
+                ->boolean()
+                ->sortable(),
             Tables\Columns\TextColumn::make('form_count')
                 ->label('Form Count')
-                ->getStateUsing(fn (YellowForm $record): int => $record->getFormCountAttribute())
+                ->getStateUsing(fn (?YellowForm $record): int => $record ? $record->getFormCountAttribute() : 0)
                 ->sortable(query: function (Builder $query, string $direction): Builder {
                     return $query
                         ->selectRaw('yellow_forms.*, (SELECT COUNT(*) FROM yellow_forms as yf WHERE yf.id_number = yellow_forms.id_number) as form_count')
@@ -233,11 +238,95 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('updated_at')
                 ->dateTime()
                 ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true)
+                ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('suspension_status')
+                ->label('Suspension Status')
+                ->badge()
+                ->color(fn (?YellowForm $record): string => match(true) {
+                    !$record => 'gray',
+                    $record->isCurrentlySuspended() => 'danger',
+                    $record->is_suspended && $record->suspension_end_date < now() => 'success',
+                    $record->is_suspended && $record->suspension_start_date > now() => 'warning',
+                    default => 'gray',
+                }),
+            Tables\Columns\TextColumn::make('suspension_start_date')
+                ->label('Suspension Start')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
+            Tables\Columns\TextColumn::make('suspension_end_date')
+                ->label('Suspension End')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
         );
 
         return $form
             ->schema([
+                Forms\Components\Section::make('Find Existing Student')
+                    ->schema([
+                        Forms\Components\Select::make('student_search')
+                            ->label('Search by ID or Name')
+                            ->searchable()
+                            ->getSearchResultsUsing(function (string $search) use ($hasNameColumns) {
+                                // Search only in Students table
+                                $students = Student::where(function ($query) use ($search) {
+                                    $query->where('id_number', 'like', "%{$search}%")
+                                        ->orWhere('first_name', 'like', "%{$search}%")
+                                        ->orWhere('last_name', 'like', "%{$search}%");
+                                })
+                                ->limit(10)
+                                ->get();
+
+                                $studentResults = [];
+                                foreach ($students as $student) {
+                                    $fullName = trim("{$student->first_name} {$student->middle_name} {$student->last_name}");
+                                    $studentResults["student_{$student->id}"] = "{$fullName} ({$student->id_number})";
+                                }
+
+                                // Return only student results
+                                return $studentResults;
+                            })
+                            ->getOptionLabelUsing(function ($value) use ($hasNameColumns): string {
+                                if (str_starts_with($value, 'student_')) {
+                                    $studentId = substr($value, 8);
+                                    $student = Student::find($studentId);
+                                    if ($student) {
+                                        $fullName = trim("{$student->first_name} {$student->middle_name} {$student->last_name}");
+                                        return "{$fullName} ({$student->id_number})";
+                                    }
+                                }
+                                return 'Unknown';
+                            })
+                            ->live()
+                            ->afterStateUpdated(function ($state, callable $set) use ($hasNameColumns) {
+                                if (!$state) return;
+
+                                if (str_starts_with($state, 'student_')) {
+                                    $studentId = substr($state, 8);
+                                    $student = Student::find($studentId);
+                                    if (!$student) return;
+
+                                    $set('id_number', $student->id_number);
+
+                                    if ($hasNameColumns) {
+                                        $set('first_name', $student->first_name);
+                                        $set('middle_name', $student->middle_name ?? '');
+                                        $set('last_name', $student->last_name);
+                                    } else {
+                                        $fullName = trim("{$student->first_name} {$student->middle_name} {$student->last_name}");
+                                        $set('name', $fullName);
+                                    }
+
+                                    $set('department_id', $student->department_id);
+                                    $set('course_id', $student->course_id);
+                                    $set('year', $student->year);
+                                }
+                            })
+                            ->dehydrated(false), // Don't save this field in the database
+                    ])
+                    ->columns(1),
+
                 Forms\Components\Section::make('Student Information')
                     ->schema($studentInfoSchema)
                     ->columns(2),
@@ -296,22 +385,32 @@ class YellowFormResource extends Resource
                             }),
                     ])->columns(1),
 
-                Forms\Components\Section::make('Status and Approvals')
+                Forms\Components\Section::make('Student & Faculty Status')
                     ->schema([
-                        Forms\Components\Toggle::make('student_approval')
-                            ->label('Student Approval')
-                            ->default(false),
                         Forms\Components\TextInput::make('faculty_signature')
-                            ->maxLength(255),
+                            ->label('Faculty Name')
+                            ->disabled(),
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
-                            ->default(false),
-                        Forms\Components\DatePicker::make('compliance_date'),
-                        Forms\Components\Toggle::make('dean_verification')
-                            ->label('Verified by Dean')
-                            ->default(false),
-                        Forms\Components\TextInput::make('noted_by')
-                            ->maxLength(255),
+                            ->default(true)
+                            ->helperText('Automatically marked as complied when approved'),
+                        Forms\Components\DatePicker::make('compliance_date')
+                            ->default(now())
+                            ->helperText('Date of compliance verification'),
+                        Forms\Components\Toggle::make('is_suspended')
+                            ->label('Suspended')
+                            ->disabled()
+                            ->helperText('Automatically set when student accumulates 3 yellow forms'),
+                        Forms\Components\DatePicker::make('suspension_start_date')
+                            ->label('Suspension Start Date')
+                            ->disabled(),
+                        Forms\Components\DatePicker::make('suspension_end_date')
+                            ->label('Suspension End Date')
+                            ->disabled(),
+                        Forms\Components\Textarea::make('suspension_notes')
+                            ->label('Suspension Notes')
+                            ->disabled()
+                            ->columnSpanFull(),
                     ])->columns(2),
             ]);
     }
@@ -368,7 +467,10 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('violation.violation_name')
                 ->label('Violation')
                 ->sortable()
-                ->getStateUsing(function (YellowForm $record): string {
+                ->getStateUsing(function (?YellowForm $record): string {
+                    if (!$record) {
+                        return 'No Record';
+                    }
                     // If there's no violation record, return 'No Violation'
                     if (!$record->violation) {
                         return 'No Violation';
@@ -384,9 +486,6 @@ class YellowFormResource extends Resource
                     return $violationName;
                 })
                 ->placeholder('None'),
-            Tables\Columns\IconColumn::make('student_approval')
-                ->boolean()
-                ->sortable(),
             Tables\Columns\IconColumn::make('complied')
                 ->boolean()
                 ->sortable(),
@@ -394,9 +493,13 @@ class YellowFormResource extends Resource
                 ->label('Dean Verified')
                 ->boolean()
                 ->sortable(),
+            Tables\Columns\IconColumn::make('head_approval')
+                ->label('Head Approved')
+                ->boolean()
+                ->sortable(),
             Tables\Columns\TextColumn::make('form_count')
                 ->label('Form Count')
-                ->getStateUsing(fn (YellowForm $record): int => $record->getFormCountAttribute())
+                ->getStateUsing(fn (?YellowForm $record): int => $record ? $record->getFormCountAttribute() : 0)
                 ->sortable(query: function (Builder $query, string $direction): Builder {
                     return $query
                         ->selectRaw('yellow_forms.*, (SELECT COUNT(*) FROM yellow_forms as yf WHERE yf.id_number = yellow_forms.id_number) as form_count')
@@ -415,7 +518,27 @@ class YellowFormResource extends Resource
             Tables\Columns\TextColumn::make('updated_at')
                 ->dateTime()
                 ->sortable()
-                ->toggleable(isToggledHiddenByDefault: true)
+                ->toggleable(isToggledHiddenByDefault: true),
+            Tables\Columns\TextColumn::make('suspension_status')
+                ->label('Suspension Status')
+                ->badge()
+                ->color(fn (?YellowForm $record): string => match(true) {
+                    !$record => 'gray',
+                    $record->isCurrentlySuspended() => 'danger',
+                    $record->is_suspended && $record->suspension_end_date < now() => 'success',
+                    $record->is_suspended && $record->suspension_start_date > now() => 'warning',
+                    default => 'gray',
+                }),
+            Tables\Columns\TextColumn::make('suspension_start_date')
+                ->label('Suspension Start')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
+            Tables\Columns\TextColumn::make('suspension_end_date')
+                ->label('Suspension End')
+                ->date()
+                ->sortable()
+                ->visible(fn (?YellowForm $record): bool => $record ? $record->is_suspended : false),
         );
 
         return $table
@@ -435,14 +558,118 @@ class YellowFormResource extends Resource
                     ->label('Repeat Offenders')
                     ->query(fn (Builder $query): Builder => $query->repeatOffenders())
                     ->toggle(),
+                Tables\Filters\Filter::make('currently_suspended')
+                    ->label('Currently Suspended')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('is_suspended', true)
+                        ->where('suspension_start_date', '<=', now())
+                        ->where('suspension_end_date', '>=', now()))
+                    ->toggle(),
+                Tables\Filters\Filter::make('suspension_completed')
+                    ->label('Suspension Completed')
+                    ->query(fn (Builder $query): Builder => $query
+                        ->where('is_suspended', true)
+                        ->where('suspension_end_date', '<', now()))
+                    ->toggle(),
             ])
             ->actions([
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\Action::make('impose_suspension')
+                    ->label('Impose Suspension')
+                    ->icon('heroicon-o-exclamation-triangle')
+                    ->color('danger')
+                    ->form([
+                        Forms\Components\DatePicker::make('suspension_start_date')
+                            ->label('Suspension Start Date')
+                            ->default(now())
+                            ->required(),
+                        Forms\Components\DatePicker::make('suspension_end_date')
+                            ->label('Suspension End Date')
+                            ->default(now()->addDays(7))
+                            ->required(),
+                        Forms\Components\Textarea::make('suspension_notes')
+                            ->label('Suspension Notes')
+                            ->required(),
+                    ])
+                    ->action(function (YellowForm $record, array $data): void {
+                        $record->update([
+                            'is_suspended' => true,
+                            'suspension_start_date' => $data['suspension_start_date'],
+                            'suspension_end_date' => $data['suspension_end_date'],
+                            'suspension_notes' => $data['suspension_notes'],
+                        ]);
+
+                        Notification::make()
+                            ->warning()
+                            ->title('Student Suspended')
+                            ->body("Student {$record->id_number} has been suspended until {$data['suspension_end_date']}.")
+                            ->send();
+                    })
+                    ->visible(fn (YellowForm $record): bool =>
+                        !$record->isCurrentlySuspended() &&
+                        auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
+                Tables\Actions\Action::make('lift_suspension')
+                    ->label('Lift Suspension')
+                    ->icon('heroicon-o-check-circle')
+                    ->color('success')
+                    ->action(function (YellowForm $record): void {
+                        $record->update([
+                            'is_suspended' => false,
+                            'suspension_end_date' => now(),
+                            'suspension_notes' => $record->suspension_notes . "\nSuspension lifted early on " . now()->format('Y-m-d'),
+                        ]);
+
+                        Notification::make()
+                            ->success()
+                            ->title('Suspension Lifted')
+                            ->body("Suspension has been lifted for student {$record->id_number}.")
+                            ->send();
+                    })
+                    ->requiresConfirmation()
+                    ->visible(fn (YellowForm $record): bool =>
+                        $record->isCurrentlySuspended() &&
+                        auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
             ])
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     Tables\Actions\DeleteBulkAction::make(),
+                    Tables\Actions\BulkAction::make('bulk_suspend')
+                        ->label('Suspend Selected')
+                        ->icon('heroicon-o-exclamation-triangle')
+                        ->color('danger')
+                        ->form([
+                            Forms\Components\DatePicker::make('suspension_start_date')
+                                ->label('Suspension Start Date')
+                                ->default(now())
+                                ->required(),
+                            Forms\Components\DatePicker::make('suspension_end_date')
+                                ->label('Suspension End Date')
+                                ->default(now()->addDays(7))
+                                ->required(),
+                            Forms\Components\Textarea::make('suspension_notes')
+                                ->label('Suspension Notes')
+                                ->required(),
+                        ])
+                        ->action(function (Collection $records, array $data): void {
+                            $records->each(function (YellowForm $record) use ($data) {
+                                if (!$record->isCurrentlySuspended()) {
+                                    $record->update([
+                                        'is_suspended' => true,
+                                        'suspension_start_date' => $data['suspension_start_date'],
+                                        'suspension_end_date' => $data['suspension_end_date'],
+                                        'suspension_notes' => $data['suspension_notes'],
+                                    ]);
+                                }
+                            });
+
+                            Notification::make()
+                                ->warning()
+                                ->title('Students Suspended')
+                                ->body("Selected students have been suspended until {$data['suspension_end_date']}.")
+                                ->send();
+                        })
+                        ->visible(fn () => auth()->user()->hasRole(['Super Admin', 'Admin', 'Dean'])),
                 ]),
             ]);
     }
@@ -461,7 +688,6 @@ class YellowFormResource extends Resource
             'create' => Pages\CreateYellowForm::route('/create'),
             'view' => Pages\ViewYellowForm::route('/{record}'),
             'edit' => Pages\EditYellowForm::route('/{record}/edit'),
-            'student-records' => Pages\StudentRecords::route('/student-records'),
         ];
     }
 }

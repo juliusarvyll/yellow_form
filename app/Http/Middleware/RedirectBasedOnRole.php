@@ -37,7 +37,7 @@ class RedirectBasedOnRole
         // Handle panel access
         if ($request->is('admin') || $request->is('admin/*')) {
             // If trying to access admin panel but not an admin
-            if (!$user->hasRole(['Super Admin', 'Admin'])) {
+            if (!$user->hasRole(['Super Admin', 'Admin','Faculty'])) {
                 Log::warning('Unauthorized admin access attempt:', [
                     'user' => $user->name,
                     'roles' => $user->roles->pluck('name'),
