@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\Auth;
 use App\Models\User;
 
@@ -11,9 +12,7 @@ class YellowForm extends Model
 {
     protected $fillable = [
         'id_number',
-        'first_name',
-        'middle_name',
-        'last_name',
+        'name',
         'course_id',
         'department_id',
         'year',
@@ -261,5 +260,25 @@ class YellowForm extends Model
         }
 
         return 'Suspended';
+    }
+
+    /**
+     * Get all yellow forms for the same student, including this one.
+     * This relationship is used by AllFormsRelationManager to display all forms.
+     */
+    public function self(): HasMany
+    {
+        // This returns all yellow forms with the same id_number, including the current one
+        return $this->hasMany(YellowForm::class, 'id_number', 'id_number');
+    }
+
+    /**
+     * This is a dummy relationship that's never actually used.
+     * We use a custom query in the StudentFormsRelationManager instead.
+     */
+    public function selfAndSiblings()
+    {
+        // This relationship is never used - we use a custom query instead
+        return $this->hasMany(YellowForm::class, 'id', 'id');
     }
 }

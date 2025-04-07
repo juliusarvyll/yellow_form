@@ -26,6 +26,10 @@ class ViolationResource extends Resource
     {
         return $form
             ->schema([
+                Forms\Components\TextInput::make('violation_name')
+                    ->required()
+                    ->maxLength(255)
+                    ->label('Violation Name'),
                 Forms\Components\TextInput::make('violation_legend')
                     ->required()
                     ->maxLength(255)
@@ -46,10 +50,6 @@ class ViolationResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->label('Violation Name'),
-                Tables\Columns\TextColumn::make('violation_description')
-                    ->searchable()
-                    ->limit(50)
-                    ->label('Description'),
                 Tables\Columns\TextColumn::make('created_at')
                     ->dateTime()
                     ->sortable()

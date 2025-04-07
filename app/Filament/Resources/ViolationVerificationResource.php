@@ -38,9 +38,6 @@ class ViolationVerificationResource extends Resource
 
     public static function form(Form $form): Form
     {
-        // Check if yellow_forms table has the new name columns
-        $hasNameColumns = Schema::hasColumns('yellow_forms', ['first_name', 'middle_name', 'last_name']);
-
         return $form
             ->schema([
                 Forms\Components\Section::make('Student Information')
@@ -49,21 +46,8 @@ class ViolationVerificationResource extends Resource
                             ->label('Student ID Number')
                             ->disabled(),
 
-                        // Name fields based on database structure
-                        $hasNameColumns
-                            ? Forms\Components\Group::make([
-                                Forms\Components\TextInput::make('first_name')
-                                    ->label('First Name')
-                                    ->disabled(),
-                                Forms\Components\TextInput::make('middle_name')
-                                    ->label('Middle Name')
-                                    ->disabled(),
-                                Forms\Components\TextInput::make('last_name')
-                                    ->label('Last Name')
-                                    ->disabled(),
-                              ])
-                            : Forms\Components\TextInput::make('name')
-                                ->disabled(),
+                        Forms\Components\TextInput::make('name')
+                            ->disabled(),
 
                         Forms\Components\Select::make('department_id')
                             ->relationship('department', 'department_name')
@@ -95,13 +79,16 @@ class ViolationVerificationResource extends Resource
                     ->schema([
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
-                            ->helperText('Verify if the student has complied with requirements'),
+                            ->helperText('Verify if the student has complied with requirements')
+                            ->disabled(),
                         Forms\Components\DatePicker::make('compliance_date')
                             ->label('Compliance Date')
-                            ->helperText('Date when the student complied'),
+                            ->helperText('Date when the student complied')
+                            ->disabled(),
                         Forms\Components\Toggle::make('dean_verification')
                             ->label('Dean Verification')
-                            ->helperText('Confirm dean verification'),
+                            ->helperText('Confirm dean verification')
+                            ->disabled(),
                         Forms\Components\Toggle::make('head_approval')
                             ->label('Head Approval')
                             ->helperText('Approve or disapprove this violation verification')
@@ -122,30 +109,15 @@ class ViolationVerificationResource extends Resource
 
     public static function table(Table $table): Table
     {
-        // Check if yellow_forms table has the new name columns
-        $hasNameColumns = Schema::hasColumns('yellow_forms', ['first_name', 'middle_name', 'last_name']);
-
         return $table
             ->columns([
                 Tables\Columns\TextColumn::make('id_number')
                     ->searchable()
                     ->sortable(),
 
-                // Name column based on database structure
-                $hasNameColumns
-                    ? Tables\Columns\TextColumn::make('full_name')
-                        ->label('Name')
-                        ->getStateUsing(function (YellowForm $record): string {
-                            return trim("{$record->first_name} {$record->middle_name} {$record->last_name}");
-                        })
-                        ->searchable(query: function (Builder $query, string $search): Builder {
-                            return $query->where('first_name', 'like', "%{$search}%")
-                                ->orWhere('middle_name', 'like', "%{$search}%")
-                                ->orWhere('last_name', 'like', "%{$search}%");
-                        })
-                    : Tables\Columns\TextColumn::make('name')
-                        ->searchable()
-                        ->sortable(),
+                Tables\Columns\TextColumn::make('name')
+                    ->searchable()
+                    ->sortable(),
 
                 Tables\Columns\TextColumn::make('department.department_name')
                     ->label('Department'),
@@ -211,7 +183,18 @@ class ViolationVerificationResource extends Resource
                     ->toggle(),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
+                Tables\Actions\Action::make('viewOrEdit')
+                    ->label(fn (YellowForm $record): string =>
+                        ($record->complied || $record->dean_verification) ? 'Edit' : 'View')
+                    ->icon(fn (YellowForm $record): string =>
+                        ($record->complied || $record->dean_verification) ? 'heroicon-o-pencil' : 'heroicon-o-eye')
+                    ->url(fn (YellowForm $record): string =>
+                        ($record->complied || $record->dean_verification)
+                            ? static::getUrl('edit', ['record' => $record])
+                            : static::getUrl('view', ['record' => $record]))
+                    ->color(fn (YellowForm $record): string =>
+                        ($record->complied || $record->dean_verification) ? 'primary' : 'secondary'),
+
                 Tables\Actions\Action::make('approve')
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
@@ -267,7 +250,8 @@ class ViolationVerificationResource extends Resource
                         ->visible(fn () => auth()->user()->hasRole('head'))
                         ->deselectRecordsAfterCompletion(),
                 ]),
-            ]);
+            ])
+            ->poll();
     }
 
     public static function getRelations(): array

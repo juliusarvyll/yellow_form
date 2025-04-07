@@ -203,6 +203,10 @@ class StudentResource extends Resource
                         $state == 2 => 'warning',
                         $state == 1 => 'info',
                         default => 'success',
+                    })
+                    ->sortable(query: function (Builder $query, string $direction): Builder {
+                        return $query->withCount('yellowForms')
+                            ->orderBy('yellow_forms_count', $direction);
                     }),
                 Tables\Columns\IconColumn::make('is_suspended')
                     ->label('Suspended')

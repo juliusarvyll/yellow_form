@@ -16,7 +16,6 @@ class EditViolationVerification extends EditRecord
     {
         return [
             Actions\ViewAction::make(),
-            Actions\DeleteAction::make(),
         ];
     }
 
@@ -54,5 +53,17 @@ class EditViolationVerification extends EditRecord
     public function canEdit(YellowForm $record): bool
     {
         return $record->complied && $record->dean_verification;
+    }
+
+    public function mount(int | string $record): void
+    {
+        parent::mount($record);
+
+        $record = $this->getRecord();
+
+        // Redirect to view if conditions not met
+        if (!$record->complied && !$record->dean_verification) {
+            redirect()->to(ViolationVerificationResource::getUrl('view', ['record' => $record]));
+        }
     }
 }

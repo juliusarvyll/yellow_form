@@ -19,11 +19,13 @@
             font-size: 14px;
             margin-bottom: 5px;
             font-style: italic;
+            color: #333;
         }
         h1 {
             font-size: 18px;
             font-weight: bold;
             margin-bottom: 5px;
+            color: #333;
         }
         table {
             width: 100%;

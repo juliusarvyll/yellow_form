@@ -93,7 +93,7 @@ class YellowFormResource extends Resource
                 Forms\Components\Section::make('Violation Details')
                     ->schema([
                         Forms\Components\Select::make('violation_id')
-                            ->relationship('violation', 'violation_legend')
+                            ->relationship('violation', 'violation_name')
                             ->searchable()
                             ->disabled(),
                         Forms\Components\TextInput::make('other_violation')
@@ -113,11 +113,9 @@ class YellowFormResource extends Resource
                             ->disabled(),
                         Forms\Components\Toggle::make('complied')
                             ->label('Student Complied')
-                            ->default(true)
-                            ->helperText('Automatically marked as complied when approved'),
+                            ->helperText('Mark if the student has complied with requirements'),
                         Forms\Components\DatePicker::make('compliance_date')
-                            ->default(now())
-                            ->helperText('Date of compliance verification'),
+                            ->helperText('Date when compliance was confirmed'),
                     ])->columns(2),
 
                 Forms\Components\Section::make('Dean Verification')
@@ -125,7 +123,6 @@ class YellowFormResource extends Resource
                         Forms\Components\Toggle::make('dean_verification')
                             ->label('I verify this violation report')
                             ->required()
-                            ->default(true)
                             ->helperText('By verifying, you confirm this violation has been properly documented and processed'),
                         Forms\Components\Textarea::make('verification_notes')
                             ->label('Verification Notes')
@@ -190,21 +187,7 @@ class YellowFormResource extends Resource
                     ->toggle(),
             ])
             ->actions([
-                Tables\Actions\ViewAction::make(),
-                Tables\Actions\Action::make('approve')
-                    ->label('Approve')
-                    ->icon('heroicon-o-check')
-                    ->action(function (YellowForm $record): void {
-                        $record->update([
-                            'dean_verification' => true,
-                            'complied' => true,
-                            'compliance_date' => now(),
-                            'verification_notes' => 'Approved by Dean: ' . Auth::user()->name,
-                        ]);
-                    })
-                    ->requiresConfirmation()
-                    ->color('success')
-                    ->visible(fn (YellowForm $record): bool => !$record->dean_verification),
+                Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make('bulk_approve')
@@ -213,10 +196,7 @@ class YellowFormResource extends Resource
                     ->action(function (Collection $records) {
                         foreach ($records as $record) {
                             $record->update([
-                                'dean_verification' => true,
-                                'complied' => true,
-                                'compliance_date' => now(),
-                                'verification_notes' => 'Bulk approved by Dean: ' . Auth::user()->name,
+                                'verification_notes' => 'Reviewed by Dean: ' . Auth::user()->name . ' on ' . now()->format('Y-m-d H:i'),
                             ]);
                         }
                     })

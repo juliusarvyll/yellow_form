@@ -20,12 +20,8 @@ class EditYellowForm extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        // Automatically set both complied and dean_verification to true
-        $data['complied'] = true;
-        $data['dean_verification'] = true;
-
-        // If there's no compliance date, set it to the current date
-        if (empty($data['compliance_date'])) {
+        // Only set compliance_date if it's missing but complied is true
+        if (isset($data['complied']) && $data['complied'] && empty($data['compliance_date'])) {
             $data['compliance_date'] = now();
         }
 
@@ -41,7 +37,7 @@ class EditYellowForm extends EditRecord
     {
         return Notification::make()
             ->success()
-            ->title('Verification completed')
-            ->body('You have successfully verified the student violation.');
+            ->title('Form updated')
+            ->body('You have successfully updated the student violation form.');
     }
 }

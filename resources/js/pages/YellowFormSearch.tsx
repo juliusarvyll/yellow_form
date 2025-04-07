@@ -74,7 +74,7 @@ export default function YellowFormSearch() {
         <div className="min-h-screen bg-white font-mono">
             <div className="container mx-auto py-8 px-4 max-w-5xl">
                 <Card className="bg-[#FFD900] border-4 border-[#101511] shadow-[8px_8px_0px_0px_rgba(16,21,17,1)]">
-                    <CardHeader className="border-b-4 border-[#101511] px-6 py-4 bg-[#648E37] bg-opacity-10">
+                    <CardHeader className="border-b-4 border-[#101511] px-6 py-4">
                         <div className="flex flex-col items-center mb-4">
                             <img src="images/logo.png" alt="SPUP Logo" className="w-24 h-24 mb-2" />
                             <CardTitle className="text-xl text-[#101511] font-bold tracking-tight">[ SPUP-OSA YELLOW FORM ]</CardTitle>
@@ -122,7 +122,7 @@ export default function YellowFormSearch() {
                                                     <div className="grid gap-6 mt-6">
                                                         {/* Academic Info */}
                                                         <div className="border-2 border-[#101511] p-4 bg-[#FFD900]">
-                                                            <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] bg-[#648E37] bg-opacity-10 p-2 border-b-2 border-[#101511]">[ ACADEMIC INFORMATION ]</h4>
+                                                            <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] p-2 border-b-2 border-[#101511]">[ ACADEMIC INFORMATION ]</h4>
                                                             <div className="grid grid-cols-3 gap-4">
                                                                 <div>
                                                                     <p className="text-xs mb-1 text-[#101511] font-bold">COURSE:</p>
@@ -141,7 +141,7 @@ export default function YellowFormSearch() {
 
                                                         {/* Violation Details */}
                                                         <div className="border-2 border-[#101511] p-4 bg-[#FFD900]">
-                                                            <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] bg-[#648E37] bg-opacity-10 p-2 border-b-2 border-[#101511]">[ VIOLATION DETAILS ]</h4>
+                                                            <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] p-2 border-b-2 border-[#101511]">[ VIOLATION DETAILS ]</h4>
                                                             <div className="space-y-3">
                                                                 <div>
                                                                     <p className="text-xs mb-1 text-[#101511] font-bold">VIOLATION:</p>
@@ -159,7 +159,7 @@ export default function YellowFormSearch() {
                                                         {/* Suspension Status */}
                                                         {form.suspension.is_suspended && (
                                                             <div className="border-2 border-[#101511] p-4 bg-[#FFD900]">
-                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] bg-[#648E37] bg-opacity-10 p-2 border-b-2 border-[#101511]">[ SUSPENSION STATUS ]</h4>
+                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] p-2 border-b-2 border-[#101511]">[ SUSPENSION STATUS ]</h4>
                                                                 <div className="space-y-3">
                                                                     <div>
                                                                         <p className="text-xs mb-1 text-[#101511] font-bold">STATUS:</p>
@@ -184,7 +184,7 @@ export default function YellowFormSearch() {
                                                         {/* Verification & Dates */}
                                                         <div className="grid grid-cols-2 gap-6">
                                                             <div className="border-2 border-[#101511] p-4 bg-[#FFD900]">
-                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] bg-[#648E37] bg-opacity-10 p-2 border-b-2 border-[#101511]">[ VERIFICATION STATUS ]</h4>
+                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] p-2 border-b-2 border-[#101511]">[ VERIFICATION STATUS ]</h4>
                                                                 <div className="space-y-3">
                                                                     <div>
                                                                         <p className="text-xs mb-1 text-[#101511] font-bold">DEAN VERIFICATION:</p>
@@ -203,7 +203,7 @@ export default function YellowFormSearch() {
                                                                 </div>
                                                             </div>
                                                             <div className="border-2 border-[#101511] p-4 bg-[#FFD900]">
-                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] bg-[#648E37] bg-opacity-10 p-2 border-b-2 border-[#101511]">[ IMPORTANT DATES ]</h4>
+                                                                <h4 className="font-bold mb-3 text-sm uppercase tracking-wide text-[#101511] p-2 border-b-2 border-[#101511]">[ IMPORTANT DATES ]</h4>
                                                                 <div className="space-y-3">
                                                                     <div>
                                                                         <p className="text-xs mb-1 text-[#101511] font-bold">ISSUE DATE:</p>
@@ -236,7 +236,7 @@ export default function YellowFormSearch() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <p className="text-center py-8 text-[#101511] font-mono border-2 border-[#101511] bg-[#648E37] bg-opacity-10 mt-4">[ NO YELLOW FORMS FOUND ]</p>
+                                    <p className="text-center py-8 text-[#101511] font-mono border-2 border-[#101511] mt-4">[ NO YELLOW FORMS FOUND ]</p>
                                 )}
                             </div>
                         )}
