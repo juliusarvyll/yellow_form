@@ -71,8 +71,13 @@ class YellowFormResource extends Resource
                             $set('middle_name', $existingStudent->middle_name ?? '');
                             $set('last_name', $existingStudent->last_name);
                         } else {
-                            $fullName = trim("{$existingStudent->first_name} {$existingStudent->middle_name} {$existingStudent->last_name}");
-                            $set('name', $fullName);
+                            // Properly concatenate the name parts
+                            $nameParts = array_filter([
+                                $existingStudent->first_name,
+                                $existingStudent->middle_name,
+                                $existingStudent->last_name
+                            ]);
+                            $set('name', implode(' ', $nameParts));
                         }
 
                         $set('department_id', $existingStudent->department_id);
@@ -152,7 +157,12 @@ class YellowFormResource extends Resource
             $tableColumns[] = Tables\Columns\TextColumn::make('full_name')
                 ->label('Name')
                 ->getStateUsing(function (YellowForm $record): string {
-                    return trim("{$record->first_name} {$record->middle_name} {$record->last_name}");
+                    $nameParts = array_filter([
+                        $record->first_name,
+                        $record->middle_name,
+                        $record->last_name
+                    ]);
+                    return implode(' ', $nameParts);
                 })
                 ->searchable(query: function (Builder $query, string $search): Builder {
                     return $query->where('first_name', 'like', "%{$search}%")
@@ -432,7 +442,12 @@ class YellowFormResource extends Resource
             $tableColumns[] = Tables\Columns\TextColumn::make('full_name')
                 ->label('Name')
                 ->getStateUsing(function (YellowForm $record): string {
-                    return trim("{$record->first_name} {$record->middle_name} {$record->last_name}");
+                    $nameParts = array_filter([
+                        $record->first_name,
+                        $record->middle_name,
+                        $record->last_name
+                    ]);
+                    return implode(' ', $nameParts);
                 })
                 ->searchable(query: function (Builder $query, string $search): Builder {
                     return $query->where('first_name', 'like', "%{$search}%")

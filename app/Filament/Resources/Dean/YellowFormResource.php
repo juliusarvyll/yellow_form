@@ -13,6 +13,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Collection;
+use App\Models\Student;
 
 class YellowFormResource extends Resource
 {
@@ -67,12 +68,20 @@ class YellowFormResource extends Resource
                         Forms\Components\TextInput::make('id_number')
                             ->label('Student ID Number')
                             ->disabled(),
-                        Forms\Components\TextInput::make('first_name')
-                            ->disabled(),
-                        Forms\Components\TextInput::make('middle_name')
-                            ->disabled(),
-                        Forms\Components\TextInput::make('last_name')
-                            ->disabled(),
+                        Forms\Components\TextInput::make('student_name')
+                            ->label('Name')
+                            ->disabled()
+                            ->dehydrated(false)
+                            ->afterStateHydrated(function ($component, $state, $record) {
+                                if (!$record) return;
+
+                                $student = Student::where('id_number', $record->id_number)->first();
+                                if ($student) {
+                                    $component->state(trim("{$student->first_name} {$student->middle_name} {$student->last_name}"));
+                                } else {
+                                    $component->state(trim("{$record->first_name} {$record->middle_name} {$record->last_name}"));
+                                }
+                            }),
                         Forms\Components\Select::make('department_id')
                             ->label('Department')
                             ->relationship('department', 'department_name')
@@ -141,18 +150,32 @@ class YellowFormResource extends Resource
                     ->sortable(),
                 Tables\Columns\TextColumn::make('full_name')
                     ->label('Name')
-                    ->searchable(['first_name', 'middle_name', 'last_name'])
                     ->getStateUsing(function (YellowForm $record): string {
-                        return trim(
-                            $record->first_name . ' ' .
-                            ($record->middle_name ? $record->middle_name . ' ' : '') .
-                            $record->last_name
-                        );
+                        $student = Student::where('id_number', $record->id_number)->first();
+                        if ($student) {
+                            return trim("{$student->first_name} {$student->middle_name} {$student->last_name}");
+                        }
+                        return trim("{$record->first_name} {$record->middle_name} {$record->last_name}");
+                    })
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('student', function (Builder $query) use ($search) {
+                            $query->where('first_name', 'like', "%{$search}%")
+                                ->orWhere('middle_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%");
+                        });
                     })
                     ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query
-                            ->orderBy('last_name', $direction)
-                            ->orderBy('first_name', $direction);
+                        return $query->orderBy(
+                            Student::select('last_name')
+                                ->whereColumn('students.id_number', 'yellow_forms.id_number')
+                                ->limit(1),
+                            $direction
+                        )->orderBy(
+                            Student::select('first_name')
+                                ->whereColumn('students.id_number', 'yellow_forms.id_number')
+                                ->limit(1),
+                            $direction
+                        );
                     }),
                 Tables\Columns\TextColumn::make('course.course_name')
                     ->label('Course')

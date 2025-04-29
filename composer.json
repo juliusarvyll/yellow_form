@@ -12,10 +12,12 @@
         "filament/filament": "^3.3",
         "inertiajs/inertia-laravel": "^2.0",
         "laravel/framework": "^12.0",
+        "laravel/socialite": "^5.19",
         "laravel/tinker": "^2.10.1",
         "league/csv": "^9.23",
         "setasign/fpdf": "*",
         "silviolleite/laravelpwa": "^2.0",
+        "socialiteproviders/microsoft": "^4.6",
         "tightenco/ziggy": "^2.4"
     },
     "require-dev": {

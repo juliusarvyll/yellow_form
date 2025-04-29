@@ -7,6 +7,7 @@ use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 use Filament\Infolists;
 use Filament\Infolists\Infolist;
+use Illuminate\Support\Facades\Schema;
 
 class ViewYellowForm extends ViewRecord
 {
@@ -29,8 +30,19 @@ class ViewYellowForm extends ViewRecord
                     ->schema([
                         Infolists\Components\TextEntry::make('id_number')
                             ->label('Student ID'),
-                        Infolists\Components\TextEntry::make('name')
-                            ->label('Student Name'),
+                        Infolists\Components\TextEntry::make('full_name')
+                            ->label('Student Name')
+                            ->getStateUsing(function ($record) {
+                                if (Schema::hasColumns('yellow_forms', ['first_name', 'middle_name', 'last_name'])) {
+                                    $nameParts = array_filter([
+                                        $record->first_name,
+                                        $record->middle_name,
+                                        $record->last_name
+                                    ]);
+                                    return implode(' ', $nameParts);
+                                }
+                                return $record->name;
+                            }),
                         Infolists\Components\TextEntry::make('department.department_name')
                             ->label('Department'),
                         Infolists\Components\TextEntry::make('course.course_name')
